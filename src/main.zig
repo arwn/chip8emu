@@ -68,8 +68,8 @@ fn execute(byte_a: u8, byte_b: u8) void {
         const vx: u8 = @truncate(u8, (instruction & 0x0f00) >> 8);
         const vy: u8 = @truncate(u8, (instruction & 0x00f0) >> 4);
         const h: u8 = @truncate(u8, (instruction & 0x000f));
-        var xpos = register[vx] % 32;
-        var ypos = register[vy] % 64;
+        var xpos = register[vx] % 64;
+        var ypos = register[vy] % 32;
         var row: u8 = 0;
         while (row < h) : (row += 1) {
             const sprite_bype = memory[index_register + row];
@@ -91,6 +91,38 @@ fn execute(byte_a: u8, byte_b: u8) void {
     } else {
         unreachable;
     }
+}
+
+fn refreshDisplay() !void {
+    //    stdout.print("\x1bc", .{}) catch {};
+    for (display) |e, i| {
+        if (e != 0) {
+            try stdout.print("*", .{});
+        } else {
+            try stdout.print(" ", .{});
+        }
+        if (i % 64 == 63) {
+            try stdout.print("\n", .{});
+        }
+    }
+}
+
+pub fn printMem() !void {
+    var line: i5 = 0;
+    for (memory) |byte| {
+        line +%= 1;
+        if (byte == 0) {
+            try stdout.print("00", .{});
+        } else {
+            try stdout.print("{x:2}", .{byte});
+        }
+        if (line == 0) try stdout.print("\n", .{});
+    }
+}
+
+fn load() !void {
+    const romname = "rom/ibm-logo.ch8";
+    _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
 
 test "execute jump" {
@@ -127,40 +159,4 @@ test "execute add" {
     register[0xf] = 0x10;
     execute(0x7f, 0x0a);
     try expect(register[0xf] == 0x1a);
-}
-
-fn refreshDisplay() !void {
-    //    stdout.print("\x1bc", .{}) catch {};
-    var i: i32 = 0;
-    for (display) |e| {
-        if (e != 0) {
-            try stdout.print("*", .{});
-        } else {
-            try stdout.print(" ", .{});
-        }
-        if (i == 32) {
-            try stdout.print("\n", .{});
-            i = 0;
-        } else {
-            i += 1;
-        }
-    }
-}
-
-pub fn printMem() !void {
-    var line: i5 = 0;
-    for (memory) |byte| {
-        line +%= 1;
-        if (byte == 0) {
-            try stdout.print("00", .{});
-        } else {
-            try stdout.print("{x:2}", .{byte});
-        }
-        if (line == 0) try stdout.print("\n", .{});
-    }
-}
-
-fn load() !void {
-    const romname = "rom/ibm-logo.ch8";
-    _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
