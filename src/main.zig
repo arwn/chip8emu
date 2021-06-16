@@ -53,8 +53,10 @@ fn execute(instruction: u16) void {
     switch (instruction & 0xf000) {
         0x0000 => {
             if (instruction == 0x00e0) {
+                // 00E0 - CLS
                 program_counter += 2;
             } else if (instruction == 0x00ee) {
+                // 00E0 - RET
                 stack_pointer -= 1;
                 program_counter = stack[stack_pointer];
             } else {
@@ -62,8 +64,10 @@ fn execute(instruction: u16) void {
             }
         },
 
+        // 1nnn - JP addr
         0x1000 => program_counter = instruction & 0x0fff,
 
+        // 2nnn - CALL addr
         0x2000 => {
             const jump_to = instruction & 0x0fff;
             stack[stack_pointer] = program_counter;
@@ -71,7 +75,9 @@ fn execute(instruction: u16) void {
             program_counter = jump_to;
         },
 
+        // 3xkk - SE Vx, byte
         0x3000 => {
+            // Skip next instruction if Vx != kk.
             const x = (instruction & 0x0f00) >> 8;
             const kk = instruction & 0x00ff;
             if (register[x] == kk) {
