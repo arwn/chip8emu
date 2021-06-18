@@ -2,6 +2,8 @@ const std = @import("std");
 const stdout = std.io.getStdOut().writer();
 const File = std.fs.File;
 
+const kb = @import("./kb.zig");
+
 const expect = @import("std").testing.expect;
 
 var memory: [4096]u8 = undefined;
@@ -249,6 +251,14 @@ fn execute(instruction: u16) void {
             program_counter = register[0] + nnn;
         },
 
+        // Cxkk - RND Vx, byte
+        0xc000 => {
+            // Set Vx = random byte AND kk.
+            const x = (instruction & 0x0f00) >> 8;
+            const kk = @truncate(u8, instruction);
+            register[x] = kk & 8;
+        },
+
         0xd000 => {
             const vx: u8 = @truncate(u8, (instruction & 0x0f00) >> 8);
             const vy: u8 = @truncate(u8, (instruction & 0x00f0) >> 4);
@@ -273,6 +283,20 @@ fn execute(instruction: u16) void {
             program_counter += 2;
         },
 
+        // Ex9E - SKP Vx
+        // TODO: make this actually work
+        0xe09e => {
+            // Skip next instruction if key with the value of Vx is
+            // pressed.
+            const x = (instruction & 0x0f00) >> 8;
+            const keycode = kb.getKey();
+            if (keycode == x) {
+                program_counter += 4;
+            } else {
+                program_counter += 2;
+            }
+        },
+
         else => unreachable,
     }
 }
@@ -290,6 +314,8 @@ fn refreshDisplay() !void {
         }
     }
 }
+
+fn getkey() u4 {}
 
 pub fn printMem() !void {
     var line: i5 = 0;
@@ -536,9 +562,21 @@ test "execute bnnn jump v0 nnn" {
 }
 
 test "execute cxkk rnd vx kk" {
-    // ???
+    register[8] = 3;
+    execute(0xc800);
+    try expect(register[8] == 0);
+
+    register[8] = 0;
+    execute(0xc8ff);
+    expect(register[8] != 0) catch {
+        execute(0xc8ff);
+        expect(register[8] != 0) catch {
+            execute(0xc8ff);
+            try expect(register[8] != 0);
+        };
+    };
 }
 
 test "execute dxyn display vx vy n" {
-    // how does one test this?
+    // TODO: this
 }
