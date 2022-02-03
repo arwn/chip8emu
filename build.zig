@@ -1,4 +1,5 @@
 const std = @import("std");
+const glfw = @import("lib/mach-glfw/build.zig");
 
 pub fn build(b: *std.build.Builder) void {
     // Standard target options allows the person running `zig build` to choose
@@ -13,6 +14,10 @@ pub fn build(b: *std.build.Builder) void {
 
     const exe = b.addExecutable("chip8emu", "src/main.zig");
     exe.linkLibC();
+
+    exe.addPackagePath("glfw", "lib/mach-glfw/src/main.zig");
+    glfw.link(b, exe, .{});
+
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();

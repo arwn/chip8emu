@@ -2,9 +2,11 @@ const std = @import("std");
 const stdout = std.io.getStdOut().writer();
 const File = std.fs.File;
 
-const kb = @import("./kb.zig");
+const glfw = @import("glfw");
 
 const expect = @import("std").testing.expect;
+
+var mainWindow: glfw.Window = undefined;
 
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
@@ -38,17 +40,29 @@ pub fn main() anyerror!void {
     @memcpy(memory[0x50..], font[0..], 0xf * 5);
     program_counter = 0x200;
     try load();
-    mainLoop();
-}
+    
+    // glfw
+    try glfw.init(.{});
+    defer glfw.terminate();
+    mainWindow = try glfw.Window.create(640, 320, "Hello, mach-glfw!", null, null, .{});
+    defer mainWindow.destroy();
 
-fn mainLoop() void {
-    //var i: i32 = 0;
-    while (true) {
+    while (!mainWindow.shouldClose()) {
+        try glfw.pollEvents();
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
         execute(instruction);
     }
+}
+
+fn keyIsPressed(key: u16) bool {
+    const pressed = switch(key) {
+        0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 => glfw.Key.zero,
+        else => unreachable
+    };
+    const k = mainWindow.getKey(pressed);
+    return k == glfw.Action.press;
 }
 
 fn execute(instruction: u16) void {
@@ -288,13 +302,12 @@ fn execute(instruction: u16) void {
         0xe09e => {
             // Skip next instruction if key with the value of Vx is
             // pressed.
-            // const x = (instruction & 0x0f00) >> 8;
-            // const keycode = kb.getKey();
-            // if (keycode == x) {
-            //     program_counter += 4;
-            // } else {
-            //     program_counter += 2;
-            // }
+            const keycode = (instruction & 0x0f00) >> 8;
+            if (keyIsPressed(keycode)) {
+                program_counter += 4;
+            } else {
+                program_counter += 2;
+            }
         },
 
         else => unreachable,
@@ -332,6 +345,7 @@ pub fn printMem() !void {
 
 fn load() !void {
     const romname = "rom/ibm-logo.ch8";
+    // const romname = "rom/stars.ch8";
     _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
 
