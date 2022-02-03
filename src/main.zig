@@ -42,7 +42,7 @@ pub fn main() anyerror!void {
 }
 
 fn mainLoop() void {
-    var i: i32 = 0;
+    //var i: i32 = 0;
     while (true) {
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
@@ -288,13 +288,13 @@ fn execute(instruction: u16) void {
         0xe09e => {
             // Skip next instruction if key with the value of Vx is
             // pressed.
-            const x = (instruction & 0x0f00) >> 8;
-            const keycode = kb.getKey();
-            if (keycode == x) {
-                program_counter += 4;
-            } else {
-                program_counter += 2;
-            }
+            // const x = (instruction & 0x0f00) >> 8;
+            // const keycode = kb.getKey();
+            // if (keycode == x) {
+            //     program_counter += 4;
+            // } else {
+            //     program_counter += 2;
+            // }
         },
 
         else => unreachable,
@@ -346,7 +346,7 @@ test "execute 00ee ret" {
     stack_pointer = 1;
     const old_sp = stack_pointer;
     program_counter = 1;
-    const old_pc = program_counter;
+    //const old_pc = program_counter;
     execute(0x00ee);
     try expect(stack_pointer == old_sp - 1);
     try expect(stack_pointer == old_sp - 1);
