@@ -6,7 +6,6 @@ const expect = @import("std").testing.expect;
 
 const SDL = @import("sdl2");
 
-
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
 var program_counter: u16 = undefined;
@@ -34,10 +33,7 @@ const font = [_]u8{
     0xF0, 0x80, 0xF0, 0x80, 0xF0,
     0xF0, 0x80, 0xF0, 0x80, 0x80,
 };
-var keyboard = [16]bool{
-    false, false, false, false, false, false, false, false, 
-    false, false, false, false, false, false, false, false
-};
+var keyboard = [16]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false };
 
 pub fn main() anyerror!void {
     @memcpy(memory[0x50..], font[0..], 0xf * 5);
@@ -51,8 +47,10 @@ pub fn main() anyerror!void {
 
     var window = try SDL.createWindow(
         "Chip-8",
-        .{ .centered = {} }, .{ .centered = {} },
-        640, 320,
+        .{ .centered = {} },
+        .{ .centered = {} },
+        640,
+        320,
         .{ .shown = true },
     );
     defer window.destroy();
@@ -75,8 +73,6 @@ fn mainLoop(renderer: SDL.Renderer) !void {
                 else => {},
             };
         }
-
-       
 
         // do vm crap
 
@@ -107,7 +103,7 @@ fn setKeyboardDown(keycode: SDL.Keycode) !void {
         SDL.Keycode.d => keyboard[13] = true,
         SDL.Keycode.e => keyboard[14] = true,
         SDL.Keycode.f => keyboard[15] = true,
-        else => stdout.print("unsupported key pressed: {}\n", .{keycode})
+        else => stdout.print("unsupported key pressed: {}\n", .{keycode}),
     };
 }
 
@@ -129,7 +125,7 @@ fn setKeyboardUp(keycode: SDL.Keycode) void {
         SDL.Keycode.d => keyboard[13] = false,
         SDL.Keycode.e => keyboard[14] = false,
         SDL.Keycode.f => keyboard[15] = false,
-        else => {} // whatever
+        else => {}, // whatever
     }
 }
 
@@ -388,36 +384,39 @@ fn execute(instruction: u16) void {
         // Fx29 - LD F, Vx
         0xf029 => unreachable,
 
-        // Fx33 - LD B, Vx
-        0xf033 => unreachable,
-
         0xf000 => {
             switch (instruction & 0x00ff) {
+                // Fx29 - LD F, Vx
+                0x0029 => {},
+                // Fx33 - LD B, Vx
+                0x0033 => {
+                    const x = (instruction & 0x0f00) >> 8;
+                    const v = register[x];
+                    const ones = @truncate(u8, v % 10);
+                    const tens = @truncate(u8, v / 10 % 10);
+                    const hundreds = @truncate(u8, v / 100);
+                    memory[index_register] = hundreds;
+                    memory[index_register + 1] = tens;
+                    memory[index_register + 2] = ones;
+                },
+
                 // Fx55 - LD [I], Vx
                 0x0055 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    for (memory[index_register..index_register+x]) |_, i| {
-                        memory[index_register+i] = register[i];
+                    for (memory[index_register .. index_register + x]) |_, i| {
+                        memory[index_register + i] = register[i];
                     }
                 },
 
+                // Fx65 - LD Vx, [I]
                 0x0065 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    for (memory[index_register..index_register+x]) |_, i| {
-                        register[i] = memory[index_register+i];
+                    for (memory[index_register .. index_register + x]) |_, i| {
+                        register[i] = memory[index_register + i];
                     }
                 },
-                
-                else => unreachable,
-            }
-        },
-            
 
-        // Fx65 - LD Vx, [I]
-        0xf065 => {
-            const x = (instruction & 0x0f00) >> 8;
-            for (memory[index_register..index_register+x]) |e, i| {
-                register[i] = e;
+                else => unreachable,
             }
         },
 
@@ -466,8 +465,8 @@ pub fn printMem() !void {
 fn load() !void {
     // const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
-    // const romname = "rom/test_opcode.ch8";
-    const romname = "rom/chip8-test-rom.ch8";
+    const romname = "rom/test_opcode.ch8";
+    // const romname = "rom/chip8-test-rom.ch8";
     _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
 
@@ -717,12 +716,24 @@ test "execute dxyn display vx vy n" {
     // TODO: this
 }
 
+test "execute Fx29 - LD F, Vx" {
+    try expect(index_register == 2);
+}
+
+test "execute Fx33 - LD B, Vx" {
+    register[1] = 123;
+    execute(0xf133);
+    try expect(memory[index_register] == 1);
+    try expect(memory[index_register + 1] == 2);
+    try expect(memory[index_register + 2] == 3);
+}
+
 test "execute Fx55 LD [I], Vx" {
     register[0] = 69;
     register[1] = 96;
     execute(0xf255);
     try expect(memory[index_register] == 69);
-    try expect(memory[index_register+1] == 96);
+    try expect(memory[index_register + 1] == 96);
 
     index_register += 2;
     register[0] = 1;
@@ -730,12 +741,12 @@ test "execute Fx55 LD [I], Vx" {
     register[2] = 3;
     register[3] = 4;
     execute(0xf455);
-    try expect(memory[index_register-2] == 69);
-    try expect(memory[index_register-1] == 96);
+    try expect(memory[index_register - 2] == 69);
+    try expect(memory[index_register - 1] == 96);
     try expect(memory[index_register] == 1);
-    try expect(memory[index_register+1] == 2);
-    try expect(memory[index_register+2] == 3);
-    try expect(memory[index_register+3] == 4);
+    try expect(memory[index_register + 1] == 2);
+    try expect(memory[index_register + 2] == 3);
+    try expect(memory[index_register + 3] == 4);
 }
 
 test "execute Fx65 - LD Vx, [I]" {
@@ -745,7 +756,7 @@ test "execute Fx65 - LD Vx, [I]" {
     register[3] = 9;
     index_register = 0;
     memory[index_register] = 0;
-    memory[index_register+1] = 1;
+    memory[index_register + 1] = 1;
     execute(0xf265);
     try expect(register[0] == 0);
     try expect(register[1] == 1);
