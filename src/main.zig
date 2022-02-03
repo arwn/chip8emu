@@ -6,6 +6,7 @@ const expect = @import("std").testing.expect;
 
 const SDL = @import("sdl2");
 
+
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
 var program_counter: u16 = undefined;
@@ -57,6 +58,7 @@ pub fn main() anyerror!void {
     try renderer.setScale(10, 10);
 
     try load();
+
     try mainLoop(renderer);
 }
 
@@ -72,6 +74,7 @@ fn mainLoop(renderer: SDL.Renderer) !void {
        
 
         // do vm crap
+
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
@@ -79,6 +82,15 @@ fn mainLoop(renderer: SDL.Renderer) !void {
 
         try refreshDisplay(renderer);
     }
+}
+
+fn keyIsPressed(key: u16) bool {
+    const pressed = switch(key) {
+        0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 => glfw.Key.zero,
+        else => unreachable
+    };
+    const k = mainWindow.getKey(pressed);
+    return k == glfw.Action.press;
 }
 
 fn execute(instruction: u16) void {
@@ -317,13 +329,12 @@ fn execute(instruction: u16) void {
         0xe09e => {
             // Skip next instruction if key with the value of Vx is
             // pressed.
-            // const x = (instruction & 0x0f00) >> 8;
-            // const keycode = kb.getKey();
-            // if (keycode == x) {
-            //     program_counter += 4;
-            // } else {
-            //     program_counter += 2;
-            // }
+            const keycode = (instruction & 0x0f00) >> 8;
+            if (keyIsPressed(keycode)) {
+                program_counter += 4;
+            } else {
+                program_counter += 2;
+            }
         },
 
         else => unreachable,
@@ -373,6 +384,7 @@ pub fn printMem() !void {
 
 fn load() !void {
     const romname = "rom/ibm-logo.ch8";
+    // const romname = "rom/stars.ch8";
     _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
 

@@ -17,6 +17,10 @@ pub fn build(b: *std.build.Builder) void {
     const exe = b.addExecutable("chip8emu", "src/main.zig");
     
     exe.linkLibC();
+
+    exe.addPackagePath("glfw", "lib/mach-glfw/src/main.zig");
+    glfw.link(b, exe, .{});
+
     exe.setTarget(target);
     sdk.link(exe, .dynamic);
     exe.addPackage(sdk.getWrapperPackage("sdl2")); 
