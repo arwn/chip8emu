@@ -335,8 +335,10 @@ fn execute(instruction: u16) void {
             const x = (instruction & 0x0f00) >> 8;
             const kk = @truncate(u8, instruction);
             register[x] = kk & 8;
+            program_counter += 2;
         },
 
+        // Dxyn - DRW Vx, Vy, nibble
         0xd000 => {
             const vx: u8 = @truncate(u8, (instruction & 0x0f00) >> 8);
             const vy: u8 = @truncate(u8, (instruction & 0x00f0) >> 4);
@@ -345,12 +347,12 @@ fn execute(instruction: u16) void {
             var ypos = register[vy] % 32;
             var row: u8 = 0;
             while (row < h) : (row += 1) {
-                const sprite_bype = memory[index_register + row];
+                const sprite_byte = memory[index_register + row];
                 var col: u8 = 0;
                 while (col < 8) : (col += 1) {
                     const x80: u8 = 0x80;
                     const s: u8 = x80 >> @truncate(u3, col);
-                    const sprite_pixel: u8 = sprite_bype & s;
+                    const sprite_pixel: u8 = sprite_byte & s;
                     const screen_pixel: *u32 = &display[@as(u32, (ypos + row)) * 32 + xpos + col];
                     if (sprite_pixel != 0) {
                         screen_pixel.* ^= 0xffffffff;
@@ -372,22 +374,39 @@ fn execute(instruction: u16) void {
             }
         },
 
-        // Fx07 - LD Vx, DT
-        0xf007 => unreachable,
-
-        // Fx18 - LD ST, Vx
-        0xf018 => unreachable,
-
-        // Fx1E - ADD I, Vx
-        0xf01e => unreachable,
-
-        // Fx29 - LD F, Vx
-        0xf029 => unreachable,
-
         0xf000 => {
             switch (instruction & 0x00ff) {
+                // ExA1 - SKNP Vx
+                0xe0a1 => unreachable,
+
+                // Fx07 - LD Vx, DT
+                0xf007 => unreachable,
+
+                // Fx0A - LD Vx, K
+                0x000a => {
+                    stdout.print("Would wait for key press.\n", .{})
+                        catch {};
+                },
+
+                // Fx15 - LD DT, Vx
+                0xf015 => unreachable,
+
+                // Fx18 - LD ST, Vx
+                0xf018 => unreachable,
+
+                // Fx1E - ADD I, Vx
+                0xf01e => {
+                    const x = (instruction & 0x0f00) >> 8;
+                    _ = @addWithOverflow(u16, index_register, register[x], &index_register);
+                },
+
                 // Fx29 - LD F, Vx
-                0x0029 => {},
+                0x0029 => {
+                    const x = (instruction & 0x0f00) >> 8;
+                    index_register = register[x] * 5;
+                    program_counter += 2;
+                },
+
                 // Fx33 - LD B, Vx
                 0x0033 => {
                     const x = (instruction & 0x0f00) >> 8;
@@ -398,6 +417,7 @@ fn execute(instruction: u16) void {
                     memory[index_register] = hundreds;
                     memory[index_register + 1] = tens;
                     memory[index_register + 2] = ones;
+                    program_counter += 2;
                 },
 
                 // Fx55 - LD [I], Vx
@@ -406,6 +426,7 @@ fn execute(instruction: u16) void {
                     for (memory[index_register .. index_register + x]) |_, i| {
                         memory[index_register + i] = register[i];
                     }
+                    program_counter += 2;
                 },
 
                 // Fx65 - LD Vx, [I]
@@ -414,13 +435,20 @@ fn execute(instruction: u16) void {
                     for (memory[index_register .. index_register + x]) |_, i| {
                         register[i] = memory[index_register + i];
                     }
+                    program_counter += 2;
                 },
 
-                else => unreachable,
+                else => {
+                    stdout.print("Unreachable instruction {x}\n", .{instruction}) catch {};
+                    unreachable;
+                },
             }
         },
 
-        else => unreachable,
+        else => {
+            stdout.print("Unreachable instruction {x}\n", .{instruction}) catch {};
+            unreachable;
+        },
     }
 }
 
@@ -463,9 +491,10 @@ pub fn printMem() !void {
 }
 
 fn load() !void {
+    const romname = "rom/abc.ch8";
     // const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
-    const romname = "rom/test_opcode.ch8";
+    // const romname = "rom/test_opcode.ch8";
     // const romname = "rom/chip8-test-rom.ch8";
     _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
@@ -717,7 +746,9 @@ test "execute dxyn display vx vy n" {
 }
 
 test "execute Fx29 - LD F, Vx" {
-    try expect(index_register == 2);
+    memory[0] = 0;
+    execute(0xf029);
+    try expect(index_register == 0);
 }
 
 test "execute Fx33 - LD B, Vx" {
