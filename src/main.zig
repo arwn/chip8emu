@@ -34,6 +34,10 @@ const font = [_]u8{
     0xF0, 0x80, 0xF0, 0x80, 0xF0,
     0xF0, 0x80, 0xF0, 0x80, 0x80,
 };
+var keyboard = [16]bool{
+    false, false, false, false, false, false, false, false, 
+    false, false, false, false, false, false, false, false
+};
 
 pub fn main() anyerror!void {
     @memcpy(memory[0x50..], font[0..], 0xf * 5);
@@ -46,7 +50,7 @@ pub fn main() anyerror!void {
     defer SDL.quit();
 
     var window = try SDL.createWindow(
-        "SDL2 Wrapper Demo",
+        "Chip-8",
         .{ .centered = {} }, .{ .centered = {} },
         640, 320,
         .{ .shown = true },
@@ -58,17 +62,18 @@ pub fn main() anyerror!void {
     try renderer.setScale(10, 10);
 
     try load();
-
     try mainLoop(renderer);
 }
 
 fn mainLoop(renderer: SDL.Renderer) !void {
     mainLoop: while (true) {
         while (SDL.pollEvent()) |ev| {
-            switch (ev) {
+            try switch (ev) {
                 .quit => break :mainLoop,
+                .key_down => setKeyboardDown(ev.key_down.keycode),
+                .key_up => setKeyboardUp(ev.key_up.keycode),
                 else => {},
-            }
+            };
         }
 
        
@@ -81,6 +86,50 @@ fn mainLoop(renderer: SDL.Renderer) !void {
         execute(instruction);
 
         try refreshDisplay(renderer);
+    }
+}
+
+fn setKeyboardDown(keycode: SDL.Keycode) !void {
+    try switch (keycode) {
+        SDL.Keycode.@"0" => keyboard[0] = true,
+        SDL.Keycode.@"1" => keyboard[1] = true,
+        SDL.Keycode.@"2" => keyboard[2] = true,
+        SDL.Keycode.@"3" => keyboard[3] = true,
+        SDL.Keycode.@"4" => keyboard[4] = true,
+        SDL.Keycode.@"5" => keyboard[5] = true,
+        SDL.Keycode.@"6" => keyboard[6] = true,
+        SDL.Keycode.@"7" => keyboard[7] = true,
+        SDL.Keycode.@"8" => keyboard[8] = true,
+        SDL.Keycode.@"9" => keyboard[9] = true,
+        SDL.Keycode.a => keyboard[10] = true,
+        SDL.Keycode.b => keyboard[11] = true,
+        SDL.Keycode.c => keyboard[12] = true,
+        SDL.Keycode.d => keyboard[13] = true,
+        SDL.Keycode.e => keyboard[14] = true,
+        SDL.Keycode.f => keyboard[15] = true,
+        else => stdout.print("unsupported key pressed: {}\n", .{keycode})
+    };
+}
+
+fn setKeyboardUp(keycode: SDL.Keycode) void {
+    switch (keycode) {
+        SDL.Keycode.@"0" => keyboard[0] = false,
+        SDL.Keycode.@"1" => keyboard[1] = false,
+        SDL.Keycode.@"2" => keyboard[2] = false,
+        SDL.Keycode.@"3" => keyboard[3] = false,
+        SDL.Keycode.@"4" => keyboard[4] = false,
+        SDL.Keycode.@"5" => keyboard[5] = false,
+        SDL.Keycode.@"6" => keyboard[6] = false,
+        SDL.Keycode.@"7" => keyboard[7] = false,
+        SDL.Keycode.@"8" => keyboard[8] = false,
+        SDL.Keycode.@"9" => keyboard[9] = false,
+        SDL.Keycode.a => keyboard[10] = false,
+        SDL.Keycode.b => keyboard[11] = false,
+        SDL.Keycode.c => keyboard[12] = false,
+        SDL.Keycode.d => keyboard[13] = false,
+        SDL.Keycode.e => keyboard[14] = false,
+        SDL.Keycode.f => keyboard[15] = false,
+        else => {} // whatever
     }
 }
 
@@ -316,16 +365,15 @@ fn execute(instruction: u16) void {
         },
 
         // Ex9E - SKP Vx
-        // TODO: make this actually work
         0xe09e => {
             // Skip next instruction if key with the value of Vx is
             // pressed.
-            // const keycode = (instruction & 0x0f00) >> 8;
-            // if (keyIsPressed(keycode)) {
-            //     program_counter += 4;
-            // } else {
-            //     program_counter += 2;
-            // }
+            const keycode = (instruction & 0x0f00) >> 8;
+            if (keyboard[keycode]) {
+                program_counter += 4;
+            } else {
+                program_counter += 2;
+            }
         },
 
         else => unreachable,
@@ -333,21 +381,19 @@ fn execute(instruction: u16) void {
 }
 
 fn refreshDisplay(renderer: SDL.Renderer) !void {
-    stdout.print("\x1bc", .{}) catch {};
-    for (display) |e, i| {
-        if (e != 0) {
-            try stdout.print("*", .{});
-        } else {
-            try stdout.print(" ", .{});
-        }
-        if (i % 64 == 63) {
-            try stdout.print("\n", .{});
-        }
-    }
-    // sdl henceforth
+    // stdout.print("\x1bc", .{}) catch {};
+    // for (display) |e, i| {
+    //     if (e != 0) {
+    //         try stdout.print("*", .{});
+    //     } else {
+    //         try stdout.print(" ", .{});
+    //     }
+    //     if (i % 64 == 63) {
+    //         try stdout.print("\n", .{});
+    //     }
+    // }
     try renderer.setColorRGB(0xF7, 0xA4, 0x1D);
     try renderer.clear();
-
     try renderer.setColor(SDL.Color.black);
     for (display) |e, i| {
         const column = @intCast(i32, i / 64);
@@ -356,7 +402,6 @@ fn refreshDisplay(renderer: SDL.Renderer) !void {
             try renderer.drawPoint(row, column);
         }
     }
-
     renderer.present();
 }
 
