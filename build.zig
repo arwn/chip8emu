@@ -1,5 +1,5 @@
 const std = @import("std");
-const glfw = @import("lib/mach-glfw/build.zig");
+const Sdk = @import("lib/SDL.zig/Sdk.zig"); // Import the Sdk at build time
 
 pub fn build(b: *std.build.Builder) void {
     // Standard target options allows the person running `zig build` to choose
@@ -12,13 +12,14 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
+    const sdk = Sdk.init(b);
+
     const exe = b.addExecutable("chip8emu", "src/main.zig");
+    
     exe.linkLibC();
-
-    exe.addPackagePath("glfw", "lib/mach-glfw/src/main.zig");
-    glfw.link(b, exe, .{});
-
     exe.setTarget(target);
+    sdk.link(exe, .dynamic);
+    exe.addPackage(sdk.getWrapperPackage("sdl2")); 
     exe.setBuildMode(mode);
     exe.install();
 

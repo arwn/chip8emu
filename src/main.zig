@@ -2,11 +2,10 @@ const std = @import("std");
 const stdout = std.io.getStdOut().writer();
 const File = std.fs.File;
 
-const glfw = @import("glfw");
-
 const expect = @import("std").testing.expect;
 
-var mainWindow: glfw.Window = undefined;
+const SDL = @import("sdl2");
+
 
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
@@ -39,30 +38,50 @@ const font = [_]u8{
 pub fn main() anyerror!void {
     @memcpy(memory[0x50..], font[0..], 0xf * 5);
     program_counter = 0x200;
-    try load();
-    
-    // glfw
-    try glfw.init(.{});
-    defer glfw.terminate();
-    mainWindow = try glfw.Window.create(640, 320, "Hello, mach-glfw!", null, null, .{});
-    defer mainWindow.destroy();
+    try SDL.init(.{
+        .video = true,
+        .events = true,
+        .audio = true,
+    });
+    defer SDL.quit();
 
-    while (!mainWindow.shouldClose()) {
-        try glfw.pollEvents();
+    var window = try SDL.createWindow(
+        "SDL2 Wrapper Demo",
+        .{ .centered = {} }, .{ .centered = {} },
+        640, 320,
+        .{ .shown = true },
+    );
+    defer window.destroy();
+
+    var renderer = try SDL.createRenderer(window, null, .{ .accelerated = true });
+    defer renderer.destroy();
+    try renderer.setScale(10, 10);
+
+    try load();
+
+    try mainLoop(renderer);
+}
+
+fn mainLoop(renderer: SDL.Renderer) !void {
+    mainLoop: while (true) {
+        while (SDL.pollEvent()) |ev| {
+            switch (ev) {
+                .quit => break :mainLoop,
+                else => {},
+            }
+        }
+
+       
+
+        // do vm crap
+
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
         execute(instruction);
-    }
-}
 
-fn keyIsPressed(key: u16) bool {
-    const pressed = switch(key) {
-        0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 => glfw.Key.zero,
-        else => unreachable
-    };
-    const k = mainWindow.getKey(pressed);
-    return k == glfw.Action.press;
+        try refreshDisplay(renderer);
+    }
 }
 
 fn execute(instruction: u16) void {
@@ -293,7 +312,6 @@ fn execute(instruction: u16) void {
                     }
                 }
             }
-            refreshDisplay() catch {};
             program_counter += 2;
         },
 
@@ -302,19 +320,19 @@ fn execute(instruction: u16) void {
         0xe09e => {
             // Skip next instruction if key with the value of Vx is
             // pressed.
-            const keycode = (instruction & 0x0f00) >> 8;
-            if (keyIsPressed(keycode)) {
-                program_counter += 4;
-            } else {
-                program_counter += 2;
-            }
+            // const keycode = (instruction & 0x0f00) >> 8;
+            // if (keyIsPressed(keycode)) {
+            //     program_counter += 4;
+            // } else {
+            //     program_counter += 2;
+            // }
         },
 
         else => unreachable,
     }
 }
 
-fn refreshDisplay() !void {
+fn refreshDisplay(renderer: SDL.Renderer) !void {
     stdout.print("\x1bc", .{}) catch {};
     for (display) |e, i| {
         if (e != 0) {
@@ -326,9 +344,21 @@ fn refreshDisplay() !void {
             try stdout.print("\n", .{});
         }
     }
-}
+    // sdl henceforth
+    try renderer.setColorRGB(0xF7, 0xA4, 0x1D);
+    try renderer.clear();
 
-fn getkey() u4 {}
+    try renderer.setColor(SDL.Color.black);
+    for (display) |e, i| {
+        const column = @intCast(i32, i / 64);
+        const row = @intCast(i32, i % 64);
+        if (e != 0) {
+            try renderer.drawPoint(row, column);
+        }
+    }
+
+    renderer.present();
+}
 
 pub fn printMem() !void {
     var line: i5 = 0;
