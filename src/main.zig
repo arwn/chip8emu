@@ -157,7 +157,6 @@ fn execute(instruction: u16) void {
 
         // 3xkk - SE Vx, byte
         0x3000 => {
-            // Skip next instruction if Vx != kk.
             const x = (instruction & 0x0f00) >> 8;
             const kk = instruction & 0x00ff;
             if (register[x] == kk) {
@@ -169,9 +168,6 @@ fn execute(instruction: u16) void {
 
         // 4xkk - SNE Vx, byte
         0x4000 => {
-            // Skip next instruction if Vx != kk.  The interpreter
-            // compares register Vx to kk, and if they are not
-            // equal,increments the program counter by 2.
             const x = (instruction & 0x0f00) >> 8;
             const kk = (instruction & 0x00ff);
             if (register[x] != kk) {
@@ -183,9 +179,6 @@ fn execute(instruction: u16) void {
 
         // 5xy0 - SE Vx, Vy
         0x5000 => {
-            // Skip next instruction if Vx = Vy.  The interpreter
-            // compares register Vx to register Vy, and if they are
-            // equal,increments the program counter by 2.
             const x = (instruction & 0x0f00) >> 8;
             const y = (instruction & 0x00f0) >> 4;
             if (register[x] == register[y]) {
@@ -197,8 +190,6 @@ fn execute(instruction: u16) void {
 
         // 6xkk - LD Vx, byte
         0x6000 => {
-            // Set Vx = kk.  The interpreter puts the value kk into
-            // register Vx.
             const x = (instruction & 0x0f00) >> 8;
             const kk = @truncate(u8, instruction & 0x00ff);
             register[x] = kk;
@@ -207,8 +198,6 @@ fn execute(instruction: u16) void {
 
         // 7xkk - ADD Vx, byte
         0x7000 => {
-            // Set Vx = Vx + kk.  Adds the value kk to the value of
-            // register Vx, then stores the result in Vx.
             const r = (instruction & 0x0f00) >> 8;
             const value = instruction & 0x00ff;
             _ = @addWithOverflow(u8, register[r], @truncate(u8, value), &register[r]);
@@ -221,33 +210,26 @@ fn execute(instruction: u16) void {
             switch (instruction & 0x000f) {
                 // 8xy0 - LD Vx, Vy
                 0x0000 => {
-                    // Set Vx = Vy.
                     register[x] = register[y];
                 },
 
                 // 8xy1 - OR Vx, Vy
                 0x0001 => {
-                    // Set Vx = Vx OR Vy.
                     register[x] |= register[y];
                 },
 
                 // 8xy2 - AND Vx, Vy
                 0x0002 => {
-                    // Set Vx = Vx AND Vy.
                     register[x] &= register[y];
                 },
 
                 // 8xy3 - XOR Vx, Vy
                 0x0003 => {
-                    // Set Vx = Vx XOR Vy.
                     register[x] ^= register[y];
                 },
 
                 // 8xy4 - ADD Vx, Vy
                 0x0004 => {
-                    // Set Vx = Vx + Vy, set VF = carry.  If the
-                    // result is greaterthan 8 bits VF is set to 1,
-                    // otherwise 0.
                     if (@addWithOverflow(u8, register[x], register[y], &register[x])) {
                         register[0xf] = 1;
                     } else {
@@ -257,8 +239,6 @@ fn execute(instruction: u16) void {
 
                 // 8xy5 - SUB Vx, Vy
                 0x0005 => {
-                    // Set Vx = Vx - Vy, set VF = NOT borrow.  If Vx <
-                    // Vy, then VF is set to 1, otherwise 0.
                     if (@subWithOverflow(u8, register[x], register[y], &register[x])) {
                         register[0xf] = 0;
                     } else {
@@ -268,17 +248,12 @@ fn execute(instruction: u16) void {
 
                 // 8xy6 - SHR Vx{, Vy}
                 0x0006 => {
-                    // Set Vx = Vx SHR 1.  If the least-significant
-                    // bit of Vx is 1, then VF is set to 1, otherwise
-                    // 0.
                     register[0xf] = register[x] & 1;
                     register[x] >>= 1;
                 },
 
                 // 8xy7 - SUBN Vx, Vy
                 0x0007 => {
-                    // Set Vx = Vy - Vx, set VF = NOT borrow.  If Vy <
-                    // Vx, then VF is set to 1, otherwise 0.
                     if (@subWithOverflow(u8, register[y], register[x], &register[x])) {
                         register[0xf] = 1;
                     } else {
@@ -288,9 +263,6 @@ fn execute(instruction: u16) void {
 
                 // 8xyE - SHL Vx{, Vy}
                 0x000e => {
-                    // Set Vx = Vx SHL 1.  If the most-significant bit
-                    // of Vx is 1, then VF is set to 1, otherwise to
-                    // 0.
                     if (@shlWithOverflow(u8, register[x], 1, &register[x])) {
                         register[0xf] = 1;
                     } else {
@@ -305,7 +277,6 @@ fn execute(instruction: u16) void {
 
         // 9xy0 - SNE Vx, Vy
         0x9000 => {
-            // Skip next instruction if Vx != Vy.
             const x = (instruction & 0x0f00) >> 8;
             const y = (instruction & 0x00f0) >> 4;
             if (register[x] != register[y]) {
@@ -317,55 +288,55 @@ fn execute(instruction: u16) void {
 
         // Annn - LD I, addr
         0xa000 => {
-            // Set I = nnn.
             index_register = instruction & 0x0fff;
             program_counter += 2;
         },
 
         // Bnnn - JP V0, addr
         0xb000 => {
-            // Jump to location nnn + V0.
             const nnn = instruction & 0x0fff;
             program_counter = register[0] + nnn;
         },
 
         // Cxkk - RND Vx, byte
         0xc000 => {
-            // Set Vx = random byte AND kk.
             const x = (instruction & 0x0f00) >> 8;
             const kk = @truncate(u8, instruction);
             register[x] = kk & 8;
             program_counter += 2;
         },
 
-        // Dxyn - DRW Vx, Vy, nibble
-        0xd000 => {
-            const vx: u8 = @truncate(u8, (instruction & 0x0f00) >> 8);
-            const vy: u8 = @truncate(u8, (instruction & 0x00f0) >> 4);
-            const h: u8 = @truncate(u8, (instruction & 0x000f));
-            var xpos = register[vx] % 64;
-            var ypos = register[vy] % 32;
-            var row: u8 = 0;
-            while (row < h) : (row += 1) {
-                const sprite_byte = memory[index_register + row];
-                var col: u8 = 0;
-                while (col < 8) : (col += 1) {
-                    const x80: u8 = 0x80;
-                    const s: u8 = x80 >> @truncate(u3, col);
-                    const sprite_pixel: u8 = sprite_byte & s;
-                    const screen_pixel: *u32 = &display[@as(u32, (ypos + row)) * 32 + xpos + col];
-                    if (sprite_pixel != 0) {
-                        screen_pixel.* ^= 0xffffffff;
+        0xD000 => {
+                const x = register[(instruction & 0x0F00) >> 8];
+                const y = register[(instruction & 0x00F0) >> 4];
+                const n = instruction & 0x000F;
+                const width = 64;
+                const height = 32;
+
+                register[0xF] = 0x0;
+                var row: usize = 0;
+                while (row < n) : (row += 1) {
+                    const sprite_byte: u8 = memory[index_register + row];
+
+                    var col: u8 = 0;
+                    while (col < 8) : (col += 1) {
+                        const sprite_pixel = sprite_byte >> @intCast(u3, (7 - col)) & 0x01;
+                        var screen_pixel = &display[((y + row) % height) * width + ((x + col) % width)];
+
+                        // Sprite pixel is on
+                        if (sprite_pixel == 0x1) {
+                            // screen pixel is also on
+                            if (screen_pixel.* == 0x1) {
+                                register[0xF] = 0x1;
+                            }
+                            screen_pixel.* ^= 0x1;
+                        }
                     }
                 }
-            }
-            program_counter += 2;
-        },
+            },
 
         // Ex9E - SKP Vx
         0xe09e => {
-            // Skip next instruction if key with the value of Vx is
-            // pressed.
             const keycode = (instruction & 0x0f00) >> 8;
             if (keyboard[keycode]) {
                 program_counter += 4;
@@ -403,7 +374,7 @@ fn execute(instruction: u16) void {
                 // Fx29 - LD F, Vx
                 0x0029 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    index_register = register[x] * 5;
+                    index_register += register[x] * 5;
                     program_counter += 2;
                 },
 
@@ -423,18 +394,18 @@ fn execute(instruction: u16) void {
                 // Fx55 - LD [I], Vx
                 0x0055 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    for (memory[index_register .. index_register + x]) |_, i| {
-                        memory[index_register + i] = register[i];
-                    }
+                    std.mem.copy(u8,
+                        memory[index_register..index_register+x+1],
+                        register[0..x+1]);
                     program_counter += 2;
                 },
 
                 // Fx65 - LD Vx, [I]
                 0x0065 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    for (memory[index_register .. index_register + x]) |_, i| {
-                        register[i] = memory[index_register + i];
-                    }
+                    std.mem.copy(u8, 
+                        register[0..x+1],
+                        memory[index_register..index_register+x+1]);
                     program_counter += 2;
                 },
 
@@ -491,8 +462,8 @@ pub fn printMem() !void {
 }
 
 fn load() !void {
-    const romname = "rom/abc.ch8";
-    // const romname = "rom/ibm-logo.ch8";
+    // const romname = "rom/abc.ch8";
+    const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
     // const romname = "rom/test_opcode.ch8";
     // const romname = "rom/chip8-test-rom.ch8";
