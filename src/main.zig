@@ -2,9 +2,9 @@ const std = @import("std");
 const stdout = std.io.getStdOut().writer();
 const File = std.fs.File;
 
-const kb = @import("./kb.zig");
-
 const expect = @import("std").testing.expect;
+
+const SDL = @import("sdl2");
 
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
@@ -37,17 +37,47 @@ const font = [_]u8{
 pub fn main() anyerror!void {
     @memcpy(memory[0x50..], font[0..], 0xf * 5);
     program_counter = 0x200;
+    try SDL.init(.{
+        .video = true,
+        .events = true,
+        .audio = true,
+    });
+    defer SDL.quit();
+
+    var window = try SDL.createWindow(
+        "SDL2 Wrapper Demo",
+        .{ .centered = {} }, .{ .centered = {} },
+        640, 320,
+        .{ .shown = true },
+    );
+    defer window.destroy();
+
+    var renderer = try SDL.createRenderer(window, null, .{ .accelerated = true });
+    defer renderer.destroy();
+    try renderer.setScale(10, 10);
+
     try load();
-    mainLoop();
+    try mainLoop(renderer);
 }
 
-fn mainLoop() void {
-    //var i: i32 = 0;
-    while (true) {
+fn mainLoop(renderer: SDL.Renderer) !void {
+    mainLoop: while (true) {
+        while (SDL.pollEvent()) |ev| {
+            switch (ev) {
+                .quit => break :mainLoop,
+                else => {},
+            }
+        }
+
+       
+
+        // do vm crap
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
         execute(instruction);
+
+        try refreshDisplay(renderer);
     }
 }
 
@@ -279,7 +309,6 @@ fn execute(instruction: u16) void {
                     }
                 }
             }
-            refreshDisplay() catch {};
             program_counter += 2;
         },
 
@@ -301,7 +330,7 @@ fn execute(instruction: u16) void {
     }
 }
 
-fn refreshDisplay() !void {
+fn refreshDisplay(renderer: SDL.Renderer) !void {
     stdout.print("\x1bc", .{}) catch {};
     for (display) |e, i| {
         if (e != 0) {
@@ -313,9 +342,21 @@ fn refreshDisplay() !void {
             try stdout.print("\n", .{});
         }
     }
-}
+    // sdl henceforth
+    try renderer.setColorRGB(0xF7, 0xA4, 0x1D);
+    try renderer.clear();
 
-fn getkey() u4 {}
+    try renderer.setColor(SDL.Color.black);
+    for (display) |e, i| {
+        const column = @intCast(i32, i / 64);
+        const row = @intCast(i32, i % 64);
+        if (e != 0) {
+            try renderer.drawPoint(row, column);
+        }
+    }
+
+    renderer.present();
+}
 
 pub fn printMem() !void {
     var line: i5 = 0;
