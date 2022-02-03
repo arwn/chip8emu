@@ -215,7 +215,7 @@ fn execute(instruction: u16) void {
             // register Vx, then stores the result in Vx.
             const r = (instruction & 0x0f00) >> 8;
             const value = instruction & 0x00ff;
-            register[r] += @truncate(u8, value);
+            _ = @addWithOverflow(u8, register[r], @truncate(u8, value), &register[r]);
             program_counter += 2;
         },
 
@@ -376,6 +376,51 @@ fn execute(instruction: u16) void {
             }
         },
 
+        // Fx07 - LD Vx, DT
+        0xf007 => unreachable,
+
+        // Fx18 - LD ST, Vx
+        0xf018 => unreachable,
+
+        // Fx1E - ADD I, Vx
+        0xf01e => unreachable,
+
+        // Fx29 - LD F, Vx
+        0xf029 => unreachable,
+
+        // Fx33 - LD B, Vx
+        0xf033 => unreachable,
+
+        0xf000 => {
+            switch (instruction & 0x00ff) {
+                // Fx55 - LD [I], Vx
+                0x0055 => {
+                    const x = (instruction & 0x0f00) >> 8;
+                    for (memory[index_register..index_register+x]) |_, i| {
+                        memory[index_register+i] = register[i];
+                    }
+                },
+
+                0x0065 => {
+                    const x = (instruction & 0x0f00) >> 8;
+                    for (memory[index_register..index_register+x]) |_, i| {
+                        register[i] = memory[index_register+i];
+                    }
+                },
+                
+                else => unreachable,
+            }
+        },
+            
+
+        // Fx65 - LD Vx, [I]
+        0xf065 => {
+            const x = (instruction & 0x0f00) >> 8;
+            for (memory[index_register..index_register+x]) |e, i| {
+                register[i] = e;
+            }
+        },
+
         else => unreachable,
     }
 }
@@ -419,8 +464,10 @@ pub fn printMem() !void {
 }
 
 fn load() !void {
-    const romname = "rom/ibm-logo.ch8";
+    // const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
+    // const romname = "rom/test_opcode.ch8";
+    const romname = "rom/chip8-test-rom.ch8";
     _ = try std.fs.cwd().readFile(romname, memory[0x200..]);
 }
 
@@ -668,4 +715,40 @@ test "execute cxkk rnd vx kk" {
 
 test "execute dxyn display vx vy n" {
     // TODO: this
+}
+
+test "execute Fx55 LD [I], Vx" {
+    register[0] = 69;
+    register[1] = 96;
+    execute(0xf255);
+    try expect(memory[index_register] == 69);
+    try expect(memory[index_register+1] == 96);
+
+    index_register += 2;
+    register[0] = 1;
+    register[1] = 2;
+    register[2] = 3;
+    register[3] = 4;
+    execute(0xf455);
+    try expect(memory[index_register-2] == 69);
+    try expect(memory[index_register-1] == 96);
+    try expect(memory[index_register] == 1);
+    try expect(memory[index_register+1] == 2);
+    try expect(memory[index_register+2] == 3);
+    try expect(memory[index_register+3] == 4);
+}
+
+test "execute Fx65 - LD Vx, [I]" {
+    register[0] = 9;
+    register[1] = 9;
+    register[2] = 9;
+    register[3] = 9;
+    index_register = 0;
+    memory[index_register] = 0;
+    memory[index_register+1] = 1;
+    execute(0xf265);
+    try expect(register[0] == 0);
+    try expect(register[1] == 1);
+    try expect(register[2] == 9);
+    try expect(register[3] == 9);
 }
