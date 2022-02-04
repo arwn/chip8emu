@@ -209,24 +209,16 @@ fn execute(instruction: u16) void {
             const y = (instruction & 0x00f0) >> 4;
             switch (instruction & 0x000f) {
                 // 8xy0 - LD Vx, Vy
-                0x0000 => {
-                    register[x] = register[y];
-                },
+                0x0000 => register[x] = register[y],
 
                 // 8xy1 - OR Vx, Vy
-                0x0001 => {
-                    register[x] |= register[y];
-                },
+                0x0001 => register[x] |= register[y],
 
                 // 8xy2 - AND Vx, Vy
-                0x0002 => {
-                    register[x] &= register[y];
-                },
+                0x0002 =>  register[x] &= register[y],
 
                 // 8xy3 - XOR Vx, Vy
-                0x0003 => {
-                    register[x] ^= register[y];
-                },
+                0x0003 => register[x] ^= register[y],
 
                 // 8xy4 - ADD Vx, Vy
                 0x0004 => {
@@ -302,38 +294,40 @@ fn execute(instruction: u16) void {
         0xc000 => {
             const x = (instruction & 0x0f00) >> 8;
             const kk = @truncate(u8, instruction);
-            register[x] = kk & 8;
+            const random_byte = 8;
+            register[x] = kk & random_byte;
             program_counter += 2;
         },
 
+        //
         0xD000 => {
-                const x = register[(instruction & 0x0F00) >> 8];
-                const y = register[(instruction & 0x00F0) >> 4];
-                const n = instruction & 0x000F;
-                const width = 64;
-                const height = 32;
+            const x = register[(instruction & 0x0F00) >> 8];
+            const y = register[(instruction & 0x00F0) >> 4];
+            const n = instruction & 0x000F;
+            const width = 64;
+            const height = 32;
 
-                register[0xF] = 0x0;
-                var row: usize = 0;
-                while (row < n) : (row += 1) {
-                    const sprite_byte: u8 = memory[index_register + row];
+            register[0xF] = 0x0;
+            var row: usize = 0;
+            while (row < n) : (row += 1) {
+                const sprite_byte: u8 = memory[index_register + row];
 
-                    var col: u8 = 0;
-                    while (col < 8) : (col += 1) {
-                        const sprite_pixel = sprite_byte >> @intCast(u3, (7 - col)) & 0x01;
-                        var screen_pixel = &display[((y + row) % height) * width + ((x + col) % width)];
+                var col: u8 = 0;
+                while (col < 8) : (col += 1) {
+                    const sprite_pixel = sprite_byte >> @intCast(u3, (7 - col)) & 0x01;
+                    var screen_pixel = &display[((y + row) % height) * width + ((x + col) % width)];
 
-                        // Sprite pixel is on
-                        if (sprite_pixel == 0x1) {
-                            // screen pixel is also on
-                            if (screen_pixel.* == 0x1) {
-                                register[0xF] = 0x1;
-                            }
-                            screen_pixel.* ^= 0x1;
+                    // Sprite pixel is on
+                    if (sprite_pixel == 0x1) {
+                        // screen pixel is also on
+                        if (screen_pixel.* == 0x1) {
+                            register[0xF] = 0x1;
                         }
+                        screen_pixel.* ^= 0x1;
                     }
                 }
-            },
+            }
+        },
 
         // Ex9E - SKP Vx
         0xe09e => {
@@ -374,7 +368,7 @@ fn execute(instruction: u16) void {
                 // Fx29 - LD F, Vx
                 0x0029 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    index_register += register[x] * 5;
+                    index_register = register[x] * 5;
                     program_counter += 2;
                 },
 
