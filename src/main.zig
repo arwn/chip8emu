@@ -79,6 +79,7 @@ fn mainLoop(renderer: SDL.Renderer) !void {
         const byte_a = memory[program_counter];
         const byte_b = memory[program_counter + 1];
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
+        try stdout.print("Executing instruction {x}\n", .{instruction});
         execute(instruction);
 
         try refreshDisplay(renderer);
@@ -327,6 +328,7 @@ fn execute(instruction: u16) void {
                     }
                 }
             }
+            program_counter += 2;
         },
 
         // Ex9E - SKP Vx
@@ -456,8 +458,8 @@ pub fn printMem() !void {
 }
 
 fn load() !void {
-    // const romname = "rom/abc.ch8";
-    const romname = "rom/ibm-logo.ch8";
+    const romname = "rom/abc.ch8";
+    // const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
     // const romname = "rom/test_opcode.ch8";
     // const romname = "rom/chip8-test-rom.ch8";
