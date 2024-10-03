@@ -3,8 +3,9 @@ const stdout = std.io.getStdOut().writer();
 const File = std.fs.File;
 
 const expect = @import("std").testing.expect;
-
-const SDL = @import("sdl2");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 
 var memory: [4096]u8 = undefined;
 var display: [32 * 64]u32 = undefined;
@@ -36,43 +37,18 @@ const font = [_]u8{
 var keyboard = [16]bool{ false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false };
 
 pub fn main() anyerror!void {
-    @memcpy(memory[0x50..], font[0..], 0xf * 5);
+    @memcpy(memory[0x50 .. 0x50 + 0xf * 5], font[0 .. 0xf * 5]);
     program_counter = 0x200;
-    try SDL.init(.{
-        .video = true,
-        .events = true,
-        .audio = true,
-    });
-    defer SDL.quit();
 
-    var window = try SDL.createWindow(
-        "Chip-8",
-        .{ .centered = {} },
-        .{ .centered = {} },
-        640,
-        320,
-        .{ .shown = true },
-    );
-    defer window.destroy();
-
-    var renderer = try SDL.createRenderer(window, null, .{ .accelerated = true });
-    defer renderer.destroy();
-    try renderer.setScale(10, 10);
+    rl.InitWindow(800, 450, "chip8emu");
 
     try load();
-    try mainLoop(renderer);
+    try mainLoop();
 }
 
-fn mainLoop(renderer: SDL.Renderer) !void {
-    mainLoop: while (true) {
-        while (SDL.pollEvent()) |ev| {
-            try switch (ev) {
-                .quit => break :mainLoop,
-                .key_down => setKeyboardDown(ev.key_down.keycode),
-                .key_up => setKeyboardUp(ev.key_up.keycode),
-                else => {},
-            };
-        }
+fn mainLoop() !void {
+    while (!rl.WindowShouldClose()) {
+        refreshDisplay();
 
         // do vm crap
 
@@ -81,53 +57,23 @@ fn mainLoop(renderer: SDL.Renderer) !void {
         const instruction: u16 = (@as(u16, byte_a) << 8) | @as(u16, byte_b);
         try stdout.print("Executing instruction {x}\n", .{instruction});
         execute(instruction);
-
-        try refreshDisplay(renderer);
     }
+    rl.CloseWindow();
 }
 
-fn setKeyboardDown(keycode: SDL.Keycode) !void {
-    try switch (keycode) {
-        SDL.Keycode.@"0" => keyboard[0] = true,
-        SDL.Keycode.@"1" => keyboard[1] = true,
-        SDL.Keycode.@"2" => keyboard[2] = true,
-        SDL.Keycode.@"3" => keyboard[3] = true,
-        SDL.Keycode.@"4" => keyboard[4] = true,
-        SDL.Keycode.@"5" => keyboard[5] = true,
-        SDL.Keycode.@"6" => keyboard[6] = true,
-        SDL.Keycode.@"7" => keyboard[7] = true,
-        SDL.Keycode.@"8" => keyboard[8] = true,
-        SDL.Keycode.@"9" => keyboard[9] = true,
-        SDL.Keycode.a => keyboard[10] = true,
-        SDL.Keycode.b => keyboard[11] = true,
-        SDL.Keycode.c => keyboard[12] = true,
-        SDL.Keycode.d => keyboard[13] = true,
-        SDL.Keycode.e => keyboard[14] = true,
-        SDL.Keycode.f => keyboard[15] = true,
-        else => stdout.print("unsupported key pressed: {}\n", .{keycode}),
-    };
-}
-
-fn setKeyboardUp(keycode: SDL.Keycode) void {
-    switch (keycode) {
-        SDL.Keycode.@"0" => keyboard[0] = false,
-        SDL.Keycode.@"1" => keyboard[1] = false,
-        SDL.Keycode.@"2" => keyboard[2] = false,
-        SDL.Keycode.@"3" => keyboard[3] = false,
-        SDL.Keycode.@"4" => keyboard[4] = false,
-        SDL.Keycode.@"5" => keyboard[5] = false,
-        SDL.Keycode.@"6" => keyboard[6] = false,
-        SDL.Keycode.@"7" => keyboard[7] = false,
-        SDL.Keycode.@"8" => keyboard[8] = false,
-        SDL.Keycode.@"9" => keyboard[9] = false,
-        SDL.Keycode.a => keyboard[10] = false,
-        SDL.Keycode.b => keyboard[11] = false,
-        SDL.Keycode.c => keyboard[12] = false,
-        SDL.Keycode.d => keyboard[13] = false,
-        SDL.Keycode.e => keyboard[14] = false,
-        SDL.Keycode.f => keyboard[15] = false,
-        else => {}, // whatever
+fn refreshDisplay() void {
+    rl.BeginDrawing();
+    rl.ClearBackground(rl.WHITE);
+    rl.DrawPixel(100, 100, rl.BLACK);
+    for (display, 0..) |e, i| {
+        const column: i32 = @intCast(i / 64);
+        const row: i32 = @intCast(i % 64);
+        if (e != 0) {
+            // rl.DrawPixel(row, column, rl.BLACK);
+            rl.DrawRectangle(row * 10, column * 10, 10, 10, rl.RED);
+        }
     }
+    rl.EndDrawing();
 }
 
 fn execute(instruction: u16) void {
@@ -192,7 +138,7 @@ fn execute(instruction: u16) void {
         // 6xkk - LD Vx, byte
         0x6000 => {
             const x = (instruction & 0x0f00) >> 8;
-            const kk = @truncate(u8, instruction & 0x00ff);
+            const kk: u8 = @truncate(instruction & 0x00ff);
             register[x] = kk;
             program_counter += 2;
         },
@@ -201,7 +147,11 @@ fn execute(instruction: u16) void {
         0x7000 => {
             const r = (instruction & 0x0f00) >> 8;
             const value = instruction & 0x00ff;
-            _ = @addWithOverflow(u8, register[r], @truncate(u8, value), &register[r]);
+            // _ = @addWithOverflow(u8, register[r], @truncate(u8, value), &register[r]);
+            const v: u8 = @truncate(value);
+            const added = @addWithOverflow(register[r], v);
+            register[r] = added[0];
+
             program_counter += 2;
         },
 
@@ -216,14 +166,17 @@ fn execute(instruction: u16) void {
                 0x0001 => register[x] |= register[y],
 
                 // 8xy2 - AND Vx, Vy
-                0x0002 =>  register[x] &= register[y],
+                0x0002 => register[x] &= register[y],
 
                 // 8xy3 - XOR Vx, Vy
                 0x0003 => register[x] ^= register[y],
 
                 // 8xy4 - ADD Vx, Vy
                 0x0004 => {
-                    if (@addWithOverflow(u8, register[x], register[y], &register[x])) {
+                    const added = @addWithOverflow(register[x], register[y]);
+                    register[x] = added[0];
+                    // if (@addWithOverflow(u8, register[x], register[y], &register[x])) {
+                    if (added[1] == 1) {
                         register[0xf] = 1;
                     } else {
                         register[0xf] = 0;
@@ -232,7 +185,10 @@ fn execute(instruction: u16) void {
 
                 // 8xy5 - SUB Vx, Vy
                 0x0005 => {
-                    if (@subWithOverflow(u8, register[x], register[y], &register[x])) {
+                    // if (@subWithOverflow(u8, register[x], register[y], &register[x])) {
+                    const subed = @subWithOverflow(register[x], register[y]);
+                    register[x] = subed[0];
+                    if (subed[1] == 1) {
                         register[0xf] = 0;
                     } else {
                         register[0xf] = 1;
@@ -247,7 +203,10 @@ fn execute(instruction: u16) void {
 
                 // 8xy7 - SUBN Vx, Vy
                 0x0007 => {
-                    if (@subWithOverflow(u8, register[y], register[x], &register[x])) {
+                    // if (@subWithOverflow(u8, register[y], register[x], &register[x])) {
+                    const subed = @subWithOverflow(register[x], register[y]);
+                    register[x] = subed[0];
+                    if (subed[1] == 1) {
                         register[0xf] = 1;
                     } else {
                         register[0xf] = 0;
@@ -256,7 +215,10 @@ fn execute(instruction: u16) void {
 
                 // 8xyE - SHL Vx{, Vy}
                 0x000e => {
-                    if (@shlWithOverflow(u8, register[x], 1, &register[x])) {
+                    // if (@shlWithOverflow(u8, register[x], 1, &register[x])) {
+                    const shld = @shlWithOverflow(register[x], 1);
+                    register[x] = shld[0];
+                    if (shld[1] == 1) {
                         register[0xf] = 1;
                     } else {
                         register[0xf] = 0;
@@ -294,7 +256,7 @@ fn execute(instruction: u16) void {
         // Cxkk - RND Vx, byte
         0xc000 => {
             const x = (instruction & 0x0f00) >> 8;
-            const kk = @truncate(u8, instruction);
+            const kk: u8 = @truncate(instruction);
             const random_byte = 8;
             register[x] = kk & random_byte;
             program_counter += 2;
@@ -315,8 +277,9 @@ fn execute(instruction: u16) void {
 
                 var col: u8 = 0;
                 while (col < 8) : (col += 1) {
-                    const sprite_pixel = sprite_byte >> @intCast(u3, (7 - col)) & 0x01;
-                    var screen_pixel = &display[((y + row) % height) * width + ((x + col) % width)];
+                    const truncated: u3 = @truncate(7 - col);
+                    const sprite_pixel = sprite_byte >> truncated & 0x01;
+                    const screen_pixel = &display[((y + row) % height) * width + (@addWithOverflow(x, col)[0] % width)];
 
                     // Sprite pixel is on
                     if (sprite_pixel == 0x1) {
@@ -351,8 +314,7 @@ fn execute(instruction: u16) void {
 
                 // Fx0A - LD Vx, K
                 0x000a => {
-                    stdout.print("Would wait for key press.\n", .{})
-                        catch {};
+                    stdout.print("Would wait for key press.\n", .{}) catch {};
                 },
 
                 // Fx15 - LD DT, Vx
@@ -364,7 +326,8 @@ fn execute(instruction: u16) void {
                 // Fx1E - ADD I, Vx
                 0xf01e => {
                     const x = (instruction & 0x0f00) >> 8;
-                    _ = @addWithOverflow(u16, index_register, register[x], &index_register);
+                    const added = @addWithOverflow(index_register, register[x]);
+                    index_register = added[0];
                 },
 
                 // Fx29 - LD F, Vx
@@ -378,9 +341,9 @@ fn execute(instruction: u16) void {
                 0x0033 => {
                     const x = (instruction & 0x0f00) >> 8;
                     const v = register[x];
-                    const ones = @truncate(u8, v % 10);
-                    const tens = @truncate(u8, v / 10 % 10);
-                    const hundreds = @truncate(u8, v / 100);
+                    const ones: u8 = @truncate(v % 10);
+                    const tens: u8 = @truncate(v / 10 % 10);
+                    const hundreds: u8 = @truncate(v / 100);
                     memory[index_register] = hundreds;
                     memory[index_register + 1] = tens;
                     memory[index_register + 2] = ones;
@@ -390,18 +353,14 @@ fn execute(instruction: u16) void {
                 // Fx55 - LD [I], Vx
                 0x0055 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    std.mem.copy(u8,
-                        memory[index_register..index_register+x+1],
-                        register[0..x+1]);
+                    @memcpy(memory[index_register .. index_register + x + 1], register[0 .. x + 1]);
                     program_counter += 2;
                 },
 
                 // Fx65 - LD Vx, [I]
                 0x0065 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    std.mem.copy(u8, 
-                        register[0..x+1],
-                        memory[index_register..index_register+x+1]);
+                    @memcpy(register[0 .. x + 1], memory[index_register .. index_register + x + 1]);
                     program_counter += 2;
                 },
 
@@ -419,31 +378,6 @@ fn execute(instruction: u16) void {
     }
 }
 
-fn refreshDisplay(renderer: SDL.Renderer) !void {
-    // stdout.print("\x1bc", .{}) catch {};
-    // for (display) |e, i| {
-    //     if (e != 0) {
-    //         try stdout.print("*", .{});
-    //     } else {
-    //         try stdout.print(" ", .{});
-    //     }
-    //     if (i % 64 == 63) {
-    //         try stdout.print("\n", .{});
-    //     }
-    // }
-    try renderer.setColorRGB(0xF7, 0xA4, 0x1D);
-    try renderer.clear();
-    try renderer.setColor(SDL.Color.black);
-    for (display) |e, i| {
-        const column = @intCast(i32, i / 64);
-        const row = @intCast(i32, i % 64);
-        if (e != 0) {
-            try renderer.drawPoint(row, column);
-        }
-    }
-    renderer.present();
-}
-
 pub fn printMem() !void {
     var line: i5 = 0;
     for (memory) |byte| {
@@ -458,8 +392,8 @@ pub fn printMem() !void {
 }
 
 fn load() !void {
-    const romname = "rom/abc.ch8";
-    // const romname = "rom/ibm-logo.ch8";
+    // const romname = "rom/abc.ch8";
+    const romname = "rom/ibm-logo.ch8";
     // const romname = "rom/stars.ch8";
     // const romname = "rom/test_opcode.ch8";
     // const romname = "rom/chip8-test-rom.ch8";
@@ -651,7 +585,8 @@ test "execute 8xyE shl vx" {
 
     register[1] = 0xff;
     execute(0x810E);
-    try expect(register[1] == @truncate(u8, 0xff << 1));
+    const x: u8 = @truncate(0xff << 1);
+    try expect(register[1] == x);
     try expect(register[15] == 1);
 }
 
