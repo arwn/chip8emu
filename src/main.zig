@@ -204,7 +204,7 @@ fn execute(instruction: u16) void {
                 // 8xy7 - SUBN Vx, Vy
                 0x0007 => {
                     // if (@subWithOverflow(u8, register[y], register[x], &register[x])) {
-                    const subed = @subWithOverflow(register[x], register[y]);
+                    const subed = @subWithOverflow(register[y], register[x]);
                     register[x] = subed[0];
                     if (subed[1] == 1) {
                         register[0xf] = 1;
@@ -326,8 +326,7 @@ fn execute(instruction: u16) void {
                 // Fx1E - ADD I, Vx
                 0xf01e => {
                     const x = (instruction & 0x0f00) >> 8;
-                    const added = @addWithOverflow(index_register, register[x]);
-                    index_register = added[0];
+                    index_register = @addWithOverflow(index_register, register[x])[0];
                 },
 
                 // Fx29 - LD F, Vx
@@ -360,7 +359,8 @@ fn execute(instruction: u16) void {
                 // Fx65 - LD Vx, [I]
                 0x0065 => {
                     const x = (instruction & 0x0f00) >> 8;
-                    @memcpy(register[0 .. x + 1], memory[index_register .. index_register + x + 1]);
+                    // @memcpy(register[0 .. x + 1], memory[index_register .. index_register + x + 1]);
+                    std.mem.copyForwards(u8, register[0..x], memory[index_register .. index_register + x]);
                     program_counter += 2;
                 },
 
@@ -561,12 +561,16 @@ test "execute 8xy6 shr vx" {
     try expect(register[15] == (0xfd >> 1) & 1);
 }
 
+const print = @import("std").debug.print;
+
 test "execute 8xy7 subn vx vy" {
-    register[1] = 6;
-    register[2] = 12;
+    const x: u8 = 6;
+    const y: u8 = 12;
+    register[1] = x;
+    register[2] = y;
     execute(0x8127);
-    try expect(register[1] == 12 - 6);
-    try expect(register[2] == 12);
+    try expect(register[1] == y - x);
+    try expect(register[2] == y);
     try expect(register[15] == 0);
 
     register[1] = 0;
